@@ -1,0 +1,69 @@
+version: '3.9'
+
+# This compose file is for local development / staging on a single host.
+# It intentionally keeps Postgres/Redis on the internal Docker network only
+# (see the network-topology note in .env.production.example) — a real
+# production deployment should use a managed Postgres/Redis behind a
+# private network instead of this file, per docs/security/deployment.md.
+
+services:
+  api:
+    build: .
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://squadlink:squadlink@postgres:5432/squadlink?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:-squadlink-dev}@redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - uploads-data:/app/uploads
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: squadlink
+      POSTGRES_PASSWORD: squadlink
+      POSTGRES_DB: squadlink
+    # Bound to localhost only, not 0.0.0.0 — reachable from the host machine
+    # for local `psql`/GUI tooling, but not from the network/internet if
+    # this ever runs on a cloud VM with a public IP. The `api` container
+    # still reaches Postgres over the internal Docker network regardless
+    # of this binding.
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U squadlink']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # SquadLink only ever stores ephemeral/derived data in Redis (presence,
+    # short-TTL caches, rate-limit counters — see docs/database/redis-strategy.md),
+    # and RedisService already degrades gracefully if Redis restarts empty.
+    # Disabling RDB snapshotting avoids paying persistence I/O cost for data
+    # that's fine to lose, per the Phase 3 guidance to only persist Redis
+    # where actually needed. allkeys-lru caps memory growth by evicting the
+    # least-recently-used keys instead of OOMing once the cache grows.
+    # requirepass: Redis has no auth by default — combined with a published
+    # port that would be a straightforward unauthenticated-Redis compromise
+    # if this ever ran on a host with a public IP.
+    command: redis-server --save "" --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-squadlink-dev}
+    ports:
+      - '127.0.0.1:6379:6379'
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  uploads-data:

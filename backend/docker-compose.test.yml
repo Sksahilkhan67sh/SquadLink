@@ -1,0 +1,26 @@
+# Isolated test database — never the same container/volume as dev or prod.
+#
+#   docker compose -f docker-compose.test.yml up -d
+#   TEST_DATABASE_URL=postgresql://squadlink:squadlink@localhost:5433/squadlink_test?schema=public \
+#     npx prisma migrate deploy --schema prisma/schema.prisma
+#   npm run test:integration
+#
+# See docs/database/testing.md.
+version: '3.9'
+
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: squadlink
+      POSTGRES_PASSWORD: squadlink
+      POSTGRES_DB: squadlink_test
+    ports:
+      - '5433:5432' # different host port so it can run alongside docker-compose.yml
+    tmpfs:
+      - /var/lib/postgresql/data # no persistent volume — a test DB should start empty every time
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U squadlink']
+      interval: 5s
+      timeout: 5s
+      retries: 10

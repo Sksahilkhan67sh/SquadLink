@@ -1,0 +1,583 @@
+// SquadLink -- Prisma schema
+// Postgres schema only for Phase 2 (per spec) -- migrations are generated but not
+// applied against a live database in this phase.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum PresenceStatus {
+  ONLINE
+  IN_GAME
+  IDLE
+  DO_NOT_DISTURB
+  OFFLINE
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+enum ConversationType {
+  DM
+  GROUP
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum AttachmentType {
+  IMAGE
+  FILE
+}
+
+enum PartyMemberRole {
+  LEADER
+  MEMBER
+}
+
+enum ChannelType {
+  TEXT
+  VOICE
+  ANNOUNCEMENT
+}
+
+enum CommunityMemberStatus {
+  ACTIVE
+  BANNED
+  LEFT
+}
+
+enum NotificationType {
+  FRIEND_REQUEST
+  PARTY_INVITE
+  MESSAGE
+  COMMUNITY
+  SYSTEM
+  MENTION
+}
+
+enum OAuthProvider {
+  GOOGLE
+  STEAM
+  DISCORD
+  TWITCH
+  GITHUB
+}
+
+enum VoiceRoomKind {
+  PARTY
+  COMMUNITY_CHANNEL
+}
+
+// ---------------------------------------------------------------------------
+// Identity & sessions
+// ---------------------------------------------------------------------------
+
+model User {
+  id                String          @id @default(uuid())
+  email             String          @unique
+  passwordHash      String?
+  displayName       String
+  handle            String          @unique
+  avatarUrl         String?
+  avatarColor       String          @default("#f2691c")
+  bannerAccent      String          @default("#f2691c")
+  bio               String?
+  level             Int             @default(1)
+  status            PresenceStatus  @default(OFFLINE)
+  statusText        String?
+  currentGame       String?
+  emailVerifiedAt   DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  // Account deletion is a soft delete: PII is scrubbed and this is set,
+  // but the row is kept so message authorship, community history, and
+  // other users' data are never destroyed as a side effect (see
+  // UsersService.deleteAccount and docs/database/deletion-strategy.md).
+  deletedAt         DateTime?
+
+  preferences       UserPreferences?
+  oauthAccounts     OAuthAccount[]
+  sessions          Session[]
+  emailVerifications EmailVerificationToken[]
+  passwordResets    PasswordResetToken[]
+
+  sentFriendRequests     FriendRequest[]     @relation("SentRequests")
+  receivedFriendRequests FriendRequest[]     @relation("ReceivedRequests")
+  friendshipsA           Friendship[]        @relation("FriendshipUserA")
+  friendshipsB           Friendship[]        @relation("FriendshipUserB")
+  blocks                 Block[]             @relation("Blocker")
+  blockedBy               Block[]             @relation("Blocked")
+
+  conversations     ConversationParticipant[]
+  messages          Message[]
+  messageReactions  MessageReaction[]
+
+  ownedParties      Party[]             @relation("PartyOwner")
+  partyMemberships  PartyMember[]
+
+  ownedCommunities  Community[]         @relation("CommunityOwner")
+  communityMembers  CommunityMember[]
+
+  notifications     Notification[]      @relation("NotificationRecipient")
+  notificationsActed Notification[]     @relation("NotificationActor")
+
+  uploads           Upload[]
+
+  @@index([handle])
+  @@index([email])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model UserPreferences {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accentTheme         String   @default("orange")
+  density              String   @default("comfortable")
+  language             String   @default("en")
+
+  inputDeviceLabel     String?
+  outputDeviceLabel    String?
+  inputVolume          Int      @default(80)
+  outputVolume         Int      @default(85)
+  noiseSuppression     Boolean  @default(true)
+  pushToTalk           Boolean  @default(false)
+
+  notifyDirectMessage  Boolean  @default(true)
+  notifyPartyInvite    Boolean  @default(true)
+  notifyCommunity      Boolean  @default(false)
+  notifySound          Boolean  @default(true)
+
+  showActivityStatus   Boolean  @default(true)
+  allowFriendRequests  String   @default("friends-of-friends")
+
+  updatedAt            DateTime @updatedAt
+}
+
+model OAuthAccount {
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       OAuthProvider
+  providerUserId String
+  accessToken    String?
+  refreshToken   String?
+  createdAt      DateTime      @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String
+  deviceName   String?
+  userAgent    String?
+  ipAddress    String?
+  rememberMe   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  @@index([userId])
+  // Supports the expired/revoked session cleanup job (section 12/24).
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Friends
+// ---------------------------------------------------------------------------
+
+model FriendRequest {
+  id          String               @id @default(uuid())
+  senderId    String
+  sender      User                 @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId  String
+  receiver    User                 @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  status      FriendRequestStatus  @default(PENDING)
+  createdAt   DateTime             @default(now())
+  respondedAt DateTime?
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+}
+
+model Friendship {
+  id         String   @id @default(uuid())
+  userAId    String
+  userA      User     @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId    String
+  userB      User     @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  pinnedByA  Boolean  @default(false)
+  pinnedByB  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model Block {
+  id          String   @id @default(uuid())
+  blockerId   String
+  blocker     User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId   String
+  blocked     User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+// ---------------------------------------------------------------------------
+// Messaging
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id           String                    @id @default(uuid())
+  type         ConversationType
+  name         String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  participants ConversationParticipant[]
+  messages     Message[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  muted          Boolean      @default(false)
+  lastReadAt     DateTime?
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String             @id @default(uuid())
+  conversationId String
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content        String
+  status         MessageStatus      @default(SENT)
+  pinned         Boolean            @default(false)
+  replyToId      String?
+  replyTo        Message?           @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]          @relation("MessageReplies")
+  editedAt       DateTime?
+  createdAt      DateTime           @default(now())
+  // Soft delete: moderation/audit trails and reply threads need the row to
+  // keep existing (a hard delete would orphan replies pointing at it via
+  // MessageReplies, and destroy evidence for moderation). Content is
+  // cleared by the repository on delete; the row and its id remain.
+  deletedAt      DateTime?
+
+  attachments    MessageAttachment[]
+  reactions      MessageReaction[]
+
+  @@index([conversationId, createdAt])
+  // Moderation / "messages by user" audit lookups (section 5).
+  @@index([authorId])
+}
+
+model MessageAttachment {
+  id        String         @id @default(uuid())
+  messageId String
+  message   Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  type      AttachmentType
+  url       String
+  name      String
+  size      Int?
+
+  @@index([messageId])
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+// ---------------------------------------------------------------------------
+// Party & voice
+// ---------------------------------------------------------------------------
+
+model Party {
+  id             String        @id @default(uuid())
+  name           String
+  game           String?
+  region         String        @default("NA East")
+  maxSize        Int           @default(5)
+  openInvites    Boolean       @default(true)
+  regionLocked   Boolean       @default(false)
+  ownerId        String
+  // Restrict, not Cascade: a party's owner is anonymized on account
+  // deletion (see UsersService.deleteAccount), never hard-deleted while
+  // they still own a party, so this FK should never actually block a
+  // delete in practice — it exists as a safety net against destroying
+  // other members' party membership as a side effect of one row going
+  // away (see docs/database/deletion-strategy.md).
+  owner          User          @relation("PartyOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  voiceRoomId    String?       @unique
+  voiceRoom      VoiceRoom?    @relation(fields: [voiceRoomId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  members        PartyMember[]
+  invites        PartyInvite[]
+
+  @@index([ownerId])
+  @@index([createdAt])
+}
+
+model PartyMember {
+  id       String          @id @default(uuid())
+  partyId  String
+  party    Party           @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     PartyMemberRole @default(MEMBER)
+  muted    Boolean         @default(false)
+  deafened Boolean         @default(false)
+  joinedAt DateTime        @default(now())
+
+  @@unique([partyId, userId])
+  @@index([userId])
+}
+
+model PartyInvite {
+  id         String   @id @default(uuid())
+  partyId    String
+  party      Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  inviterId  String
+  inviteeId  String
+  createdAt  DateTime @default(now())
+  respondedAt DateTime?
+  accepted   Boolean?
+
+  @@index([inviteeId])
+}
+
+model VoiceRoom {
+  id         String        @id @default(uuid())
+  kind       VoiceRoomKind
+  livekitName String       @unique
+  createdAt  DateTime      @default(now())
+  closedAt   DateTime?
+
+  party      Party?
+  channel    Channel?
+}
+
+// ---------------------------------------------------------------------------
+// Communities
+// ---------------------------------------------------------------------------
+
+model Community {
+  id          String            @id @default(uuid())
+  name        String
+  tag         String
+  accentColor String            @default("#f2691c")
+  iconUrl     String?
+  ownerId     String
+  // Restrict, not Cascade — see the same note on Party.owner above.
+  // Deleting the owning user must never cascade-delete a community and
+  // silently wipe every other member's channels, roles, and messages.
+  owner       User              @relation("CommunityOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  members        CommunityMember[]
+  channelGroups  ChannelGroup[]
+  roles          CommunityRole[]
+  events         CommunityEvent[]
+  announcements  Announcement[]
+
+  @@index([ownerId])
+}
+
+model CommunityMember {
+  id          String                  @id @default(uuid())
+  communityId String
+  community   Community               @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      CommunityMemberStatus   @default(ACTIVE)
+  joinedAt    DateTime                @default(now())
+
+  roles       CommunityMemberRole[]
+
+  @@unique([communityId, userId])
+  @@index([userId])
+  // listMembers()/listForUser() filter by communityId + status together.
+  @@index([communityId, status])
+}
+
+model CommunityRole {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  color       String    @default("#9aa0a8")
+  permissions String[]  @default([])
+  position    Int       @default(0)
+
+  members     CommunityMemberRole[]
+
+  @@index([communityId])
+}
+
+model CommunityMemberRole {
+  id                String          @id @default(uuid())
+  communityMemberId String
+  communityMember   CommunityMember @relation(fields: [communityMemberId], references: [id], onDelete: Cascade)
+  roleId            String
+  role              CommunityRole   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([communityMemberId, roleId])
+}
+
+model ChannelGroup {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  position    Int       @default(0)
+
+  channels    Channel[]
+
+  @@index([communityId])
+}
+
+model Channel {
+  id             String       @id @default(uuid())
+  channelGroupId String
+  channelGroup   ChannelGroup @relation(fields: [channelGroupId], references: [id], onDelete: Cascade)
+  name           String
+  type           ChannelType
+  position       Int          @default(0)
+  voiceRoomId    String?      @unique
+  voiceRoom      VoiceRoom?   @relation(fields: [voiceRoomId], references: [id])
+
+  @@index([channelGroupId])
+}
+
+model CommunityEvent {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  title       String
+  game        String?
+  date        DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([communityId, date])
+}
+
+model Announcement {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  title       String
+  body        String
+  authorId    String
+  postedAt    DateTime  @default(now())
+
+  @@index([communityId, postedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id          String            @id @default(uuid())
+  recipientId String
+  recipient   User              @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?             @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  type        NotificationType
+  title       String
+  body        String
+  read        Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+
+  @@index([recipientId, read])
+  @@index([recipientId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Uploads
+// ---------------------------------------------------------------------------
+
+model Upload {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind       String
+  url        String
+  mimeType   String
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
