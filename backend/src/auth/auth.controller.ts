@@ -52,7 +52,7 @@ export class AuthController {
     res.cookie(REFRESH_COOKIE, token, {
       httpOnly: true,
       secure: this.config.isProduction,
-      sameSite: 'lax',
+      sameSite: this.config.isProduction ? 'none' : 'lax',
       path: '/api/v1/auth',
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
@@ -130,8 +130,11 @@ export class AuthController {
   ) {
     const refreshToken = req.cookies?.[REFRESH_COOKIE] as string | undefined;
     await this.authService.logout(refreshToken, user.id);
-    res.clearCookie(REFRESH_COOKIE, { path: '/api/v1/auth' });
-  }
+    res.clearCookie(REFRESH_COOKIE, {
+      path: '/api/v1/auth',
+      secure: this.config.isProduction,
+      sameSite: this.config.isProduction ? 'none' : 'lax',
+    });
 
   @Public()
   @Throttle({ default: { limit: 3, ttl: 300_000 } })
