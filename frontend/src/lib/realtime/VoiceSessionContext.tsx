@@ -74,6 +74,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       socket.off('party:updated', onPartyUpdated)
     }
   }, [status, refreshActiveParty])
+  
+  useEffect(() => {
+  const socket = getSocket()
+  const partyId = activeParty?.id
+  if (!socket || status !== 'authenticated' || !partyId) return
+
+  socket.emit('party:join', { partyId })
+  return () => {
+    socket.emit('party:leave', { partyId })
+  }
+}, [status, activeParty?.id])
+
+  
 
   const teardownRoom = useCallback(() => {
     roomRef.current?.disconnect()
