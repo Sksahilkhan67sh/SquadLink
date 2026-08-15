@@ -22,6 +22,7 @@ import type { ApiParty } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { getSocket } from './socket';
 import { env } from '../env';
+import { useToast } from '@/components/ui/Toast';
 
 interface VoiceSessionValue {
   activeParty: ApiParty | null;
@@ -48,6 +49,7 @@ export function VoiceSessionProvider({
   children: ReactNode;
 }) {
   const { status } = useAuth();
+  const { push } = useToast();
 
   const [activeParty, setActiveParty] = useState<ApiParty | null>(null);
   const [connected, setConnected] = useState(false);
@@ -99,20 +101,6 @@ export function VoiceSessionProvider({
 
   useEffect(() => {
     const socket = getSocket();
-
-    if (!socket || status !== 'authenticated') return;
-
-    const onPartyUpdated = () => refreshActiveParty();
-
-    socket.on('party:updated', onPartyUpdated);
-
-    return () => {
-      socket.off('party:updated', onPartyUpdated);
-    };
-  }, [status, refreshActiveParty]);
-
-  useEffect(() => {
-    const socket = getSocket();
     const partyId = activeParty?.id;
 
     if (!socket || status !== 'authenticated' || !partyId) return;
@@ -137,6 +125,33 @@ export function VoiceSessionProvider({
   const leaveVoice = useCallback(async () => {
     teardownRoom();
   }, [teardownRoom]);
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    if (!socket || status !== 'authenticated') return;
+
+    const onPartyUpdated = () => refreshActiveParty();
+
+    // The host left (or the party otherwise emptied out) — the party is
+    // already gone server-side, so drop it and any live voice connection
+    // immediately instead of waiting on a refetch.
+    const onPartyEnded = (data: { partyId: string; reason: 'host_left' | 'empty' }) => {
+      setActiveParty((prev) => (prev?.id === data.partyId ? null : prev));
+      teardownRoom();
+      if (data.reason === 'host_left') {
+        push({ kind: 'info', title: 'Party ended', description: 'The host left the party.' });
+      }
+    };
+
+    socket.on('party:updated', onPartyUpdated);
+    socket.on('party:ended', onPartyEnded);
+
+    return () => {
+      socket.off('party:updated', onPartyUpdated);
+      socket.off('party:ended', onPartyEnded);
+    };
+  }, [status, refreshActiveParty, teardownRoom, push]);
 
   const joinPartyVoice = useCallback(
     async (partyId: string) => {
