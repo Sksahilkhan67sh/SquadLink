@@ -27,7 +27,13 @@ import {
   NOTIFICATION_CREATED_EVENT,
   NotificationCreatedPayload,
 } from '../notifications/notifications.service';
-import { PARTY_UPDATED_EVENT } from '../party/party.service';
+import {
+  PARTY_UPDATED_EVENT,
+  PARTY_ENDED_EVENT,
+  PARTY_INVITE_CREATED_EVENT,
+  PartyEndedPayload,
+  PartyInviteCreatedPayload,
+} from '../party/party.service';
 
 function userRoom(userId: string) {
   return `user:${userId}`;
@@ -453,5 +459,22 @@ export class RealtimeGateway
     this.server
       .to(partyRoom(payload.partyId))
       .emit('party:updated', redactSensitiveFields(payload.party));
+  }
+
+  // Host left (or the party otherwise emptied out): tell everyone still
+  // in the room right away, so their client can drop the party and voice
+  // connection instead of waiting on the next party:updated poll.
+  @OnEvent(PARTY_ENDED_EVENT)
+  handlePartyEnded(payload: PartyEndedPayload) {
+    this.server.to(partyRoom(payload.partyId)).emit('party:ended', payload);
+  }
+
+  // Real-time invite popup: sent straight to the invitee's own socket
+  // room (not the party room, since they're not a member yet).
+  @OnEvent(PARTY_INVITE_CREATED_EVENT)
+  handlePartyInviteCreated(payload: PartyInviteCreatedPayload) {
+    this.server
+      .to(userRoom(payload.inviteeId))
+      .emit('party:invite', redactSensitiveFields(payload.invite));
   }
 }
