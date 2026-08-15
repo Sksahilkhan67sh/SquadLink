@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { authApi } from '../api/auth'
 import { usersApi } from '../api/users'
 import { ApiError, getAccessToken, registerRefreshHandler, registerSessionExpiredHandler, setAccessToken } from '../api/http'
@@ -35,17 +35,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     disconnectSocket()
   }, [])
 
+  // Refresh tokens rotate server-side (each use revokes the old session
+  // and issues a new one), so two refresh calls racing on the same old
+  // token will always have exactly one of them lose — the loser gets
+  // "session already revoked" even though the winner just succeeded.
+  // That race is easy to trigger by accident: React StrictMode fires
+  // this provider's mount effect twice in dev, and a burst of parallel
+  // 401s elsewhere would each try to trigger their own refresh too.
+  // Sharing one in-flight promise across every caller means only one
+  // network call — and one rotation — ever happens at a time, so late
+  // callers just await the same result instead of racing a fresh one.
+  const inFlightRefresh = useRef<Promise<boolean> | null>(null)
+
   // Silent refresh: the httpOnly refresh_token cookie is the real source of
   // truth, so a page reload (which loses the in-memory access token) can
   // still recover a session without the user re-entering credentials.
   const attemptRefresh = useCallback(async (): Promise<boolean> => {
+    if (inFlightRefresh.current) return inFlightRefresh.current
+
+    const promise = (async () => {
+      try {
+        const session = await authApi.refresh()
+        applySession(session)
+        return true
+      } catch {
+        clearSession()
+        return false
+      }
+    })()
+
+    inFlightRefresh.current = promise
     try {
-      const session = await authApi.refresh()
-      applySession(session)
-      return true
-    } catch {
-      clearSession()
-      return false
+      return await promise
+    } finally {
+      inFlightRefresh.current = null
     }
   }, [applySession, clearSession])
 
