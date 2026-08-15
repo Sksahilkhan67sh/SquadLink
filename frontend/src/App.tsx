@@ -29,6 +29,7 @@ import { ServerErrorPage } from '@/features/errors/ServerErrorPage'
 import { NetworkErrorPage } from '@/features/errors/NetworkErrorPage'
 import { OfflinePage } from '@/features/errors/OfflinePage'
 import { CallOverlay } from '@/components/shared/CallOverlay'
+import { PartyInviteOverlay } from '@/components/shared/PartyInviteOverlay'
 
 export default function App() {
   return (
@@ -75,6 +76,7 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         <CallOverlay />
+        <PartyInviteOverlay />
       </AuthGate>
     </BrowserRouter>
   )
