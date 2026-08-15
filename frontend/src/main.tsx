@@ -7,6 +7,7 @@ import { AuthProvider } from '@/lib/auth/AuthContext'
 import { AppDataProvider } from '@/lib/realtime/AppDataContext'
 import { VoiceSessionProvider } from '@/lib/realtime/VoiceSessionContext'
 import { CallProvider } from '@/lib/realtime/CallContext'
+import { PartyInviteProvider } from '@/lib/realtime/PartyInviteContext'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -14,9 +15,11 @@ createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <AppDataProvider>
           <VoiceSessionProvider>
-            <CallProvider>
-              <App />
-            </CallProvider>
+            <PartyInviteProvider>
+              <CallProvider>
+                <App />
+              </CallProvider>
+            </PartyInviteProvider>
           </VoiceSessionProvider>
         </AppDataProvider>
       </AuthProvider>
