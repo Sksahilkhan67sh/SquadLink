@@ -3,6 +3,17 @@ import { env } from '../env'
 import { getAccessToken } from '../api/http'
 import type { ApiMessage, ApiNotification, PresenceStatusApi } from '../api/types'
 
+export interface PartyInviteEvent {
+  id: string
+  partyId: string
+  partyName: string
+  partyGame: string | null
+  inviterId: string
+  inviterName: string
+  inviterAvatarColor: string
+  createdAt: string
+}
+
 export interface ServerToClientEvents {
   'message:created': (message: ApiMessage) => void
   'message:updated': (message: ApiMessage) => void
@@ -11,6 +22,8 @@ export interface ServerToClientEvents {
   'presence:update': (data: { userId: string; status: PresenceStatusApi }) => void
   'notification:created': (notification: ApiNotification) => void
   'party:updated': (data: unknown) => void
+  'party:ended': (data: { partyId: string; reason: 'host_left' | 'empty' }) => void
+  'party:invite': (data: PartyInviteEvent) => void
   'call:incoming': (data: { callId: string; partyId: string; partyName: string; callerId: string; callerName: string; callerAvatarColor: string }) => void
   'call:ringing': (data: { callId: string; partyId: string }) => void
   'call:accepted': (data: { callId: string; partyId: string; userId: string }) => void
