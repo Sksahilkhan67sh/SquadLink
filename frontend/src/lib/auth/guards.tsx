@@ -1,15 +1,12 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from './AuthContext'
+import { LoadingScreen } from '@/components/shared/LoadingScreen'
 
 /** Splash/loading state while we bootstrap the session from the refresh cookie. */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { status } = useAuth()
   if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-400">
-        <div className="animate-pulse text-sm">Loading SquadLink…</div>
-      </div>
-    )
+    return <LoadingScreen message="Signing you in…" />
   }
   return <>{children}</>
 }
