@@ -14,6 +14,27 @@ import { PartyRepository } from './party.repository';
 import { FriendsService } from '../friends/friends.service';
 
 export const PARTY_UPDATED_EVENT = 'party.updated';
+export const PARTY_ENDED_EVENT = 'party.ended';
+export const PARTY_INVITE_CREATED_EVENT = 'party.invite.created';
+
+export interface PartyEndedPayload {
+  partyId: string;
+  reason: 'host_left' | 'empty';
+}
+
+export interface PartyInviteCreatedPayload {
+  inviteeId: string;
+  invite: {
+    id: string;
+    partyId: string;
+    partyName: string;
+    partyGame: string | null;
+    inviterId: string;
+    inviterName: string;
+    inviterAvatarColor: string;
+    createdAt: Date;
+  };
+}
 
 @Injectable()
 export class PartyService {
@@ -88,6 +109,25 @@ export class PartyService {
       title: 'Party invite',
       body: `You've been invited to join "${party.name}".`,
     });
+
+    // Real-time popup for the invitee, in addition to the persisted
+    // notification above: the notification covers "check later", this
+    // covers "show me a Join/Decline prompt right now" while they're online.
+    const inviter = await this.prisma.user.findUnique({ where: { id: userId } });
+    this.eventEmitter.emit(PARTY_INVITE_CREATED_EVENT, {
+      inviteeId,
+      invite: {
+        id: invite.id,
+        partyId: party.id,
+        partyName: party.name,
+        partyGame: party.game,
+        inviterId: userId,
+        inviterName: inviter?.displayName ?? 'Someone',
+        inviterAvatarColor: inviter?.avatarColor ?? '#f2691c',
+        createdAt: invite.createdAt,
+      },
+    } satisfies PartyInviteCreatedPayload);
+
     return invite;
   }
 
@@ -173,14 +213,19 @@ export class PartyService {
       party.members.find((m) => m.userId === userId)?.role ===
       PartyMemberRole.LEADER;
 
-    if (isLeader && party.members.length > 1) {
-      const nextLeader = party.members.find((m) => m.userId !== userId);
-      if (nextLeader)
-        await this.partyRepository.setMemberRole(
-          partyId,
-          nextLeader.userId,
-          PartyMemberRole.LEADER,
-        );
+    // The host leaving ends the party for everyone, immediately — no
+    // leadership handoff. Members still connected get a party:ended
+    // event (see RealtimeGateway) and their client clears the party and
+    // drops voice; anyone who reconnects later just finds it gone.
+    if (isLeader) {
+      if (party.voiceRoom)
+        await this.liveKitService.closeRoom(party.voiceRoom.livekitName);
+      await this.partyRepository.delete(partyId);
+      this.eventEmitter.emit(PARTY_ENDED_EVENT, {
+        partyId,
+        reason: 'host_left',
+      } satisfies PartyEndedPayload);
+      return null;
     }
 
     await this.partyRepository.removeMember(partyId, userId);
@@ -190,6 +235,10 @@ export class PartyService {
       if (party.voiceRoom)
         await this.liveKitService.closeRoom(party.voiceRoom.livekitName);
       await this.partyRepository.delete(partyId);
+      this.eventEmitter.emit(PARTY_ENDED_EVENT, {
+        partyId,
+        reason: 'empty',
+      } satisfies PartyEndedPayload);
       return null;
     }
 
