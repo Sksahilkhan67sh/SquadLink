@@ -92,3 +92,56 @@ body {
 .anim-zoom-in { animation: zoom-in 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
 .anim-slide-up { animation: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
 .anim-slide-in-right { animation: slide-in-right 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* --- 3D start animation (StartAnimation.tsx) --- */
+.intro-scene { perspective: 1000px; }
+
+.intro-cube {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  transform-style: preserve-3d;
+  animation: intro-cube-spin 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.intro-cube-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-surface-3), var(--color-surface));
+  border: 1px solid var(--color-orange-600);
+  box-shadow: inset 0 0 24px rgba(242, 105, 28, 0.08);
+}
+.intro-cube-face.intro-face-front { transform: translateZ(48px); }
+.intro-cube-face.intro-face-back { transform: rotateY(180deg) translateZ(48px); }
+.intro-cube-face.intro-face-right { transform: rotateY(90deg) translateZ(48px); }
+.intro-cube-face.intro-face-left { transform: rotateY(-90deg) translateZ(48px); }
+.intro-cube-face.intro-face-top { transform: rotateX(90deg) translateZ(48px); }
+.intro-cube-face.intro-face-bottom { transform: rotateX(-90deg) translateZ(48px); }
+
+@keyframes intro-cube-spin {
+  0% { transform: rotateX(-35deg) rotateY(-680deg) scale(0.35); opacity: 0; }
+  45% { opacity: 1; }
+  100% { transform: rotateX(-18deg) rotateY(360deg) scale(1); opacity: 1; }
+}
+
+.intro-wordmark {
+  opacity: 0;
+  transform: translateY(14px) rotateX(-30deg);
+  transform-style: preserve-3d;
+  animation: intro-wordmark-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 1.05s;
+}
+@keyframes intro-wordmark-in {
+  to { opacity: 1; transform: translateY(0) rotateX(0); }
+}
+
+.intro-exit {
+  animation: intro-exit 0.45s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+@keyframes intro-exit {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.18); }
+}
