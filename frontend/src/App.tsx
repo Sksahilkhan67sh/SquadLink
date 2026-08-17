@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
-import { AuthGate, RequireAuth, RequireGuest } from '@/lib/auth/guards'
+import { AuthGate, RequireAuth, RequireGuest, RootRoute } from '@/lib/auth/guards'
 
 import { SplashScreen } from '@/features/onboarding/SplashScreen'
 import { OnboardingPage } from '@/features/onboarding/OnboardingPage'
@@ -36,6 +36,9 @@ export default function App() {
     <BrowserRouter>
       <AuthGate>
         <Routes>
+          {/* Public landing page for logged-out visitors; redirects to /home when authenticated */}
+          <Route path="/" element={<RootRoute />} />
+
           {/* Onboarding — public, no shell */}
           <Route path="/splash" element={<SplashScreen />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -58,7 +61,7 @@ export default function App() {
           {/* Main app — requires an authenticated session, behind shell (sidebar + topbar) */}
           <Route element={<RequireAuth />}>
             <Route element={<AppShell />}>
-              <Route path="/" element={<HomePage />} />
+              <Route path="/home" element={<HomePage />} />
               <Route path="/friends" element={<FriendsPage />} />
               <Route path="/messages" element={<MessagesPage />} />
               <Route path="/party" element={<PartyPage />} />
