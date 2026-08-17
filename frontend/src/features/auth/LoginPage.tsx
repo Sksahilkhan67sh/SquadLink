@@ -25,7 +25,7 @@ export function LoginPage() {
     try {
       await login(email, password, remember)
       const from = (location.state as { from?: Location })?.from
-      navigate(from?.pathname ?? '/', { replace: true })
+      navigate(from?.pathname ?? '/home', { replace: true })
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 400)) {
         setError('Incorrect email or password.')
