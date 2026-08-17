@@ -94,14 +94,34 @@ body {
 .anim-slide-in-right { animation: slide-in-right 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
 
 /* --- 3D start animation (StartAnimation.tsx) --- */
-.intro-scene { perspective: 1000px; }
+.intro-scene { perspective: 1200px; }
+
+.intro-glow {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--color-orange-glow), transparent 70%);
+  filter: blur(20px);
+  opacity: 0;
+  animation: intro-glow-pulse 2.6s ease-out forwards;
+}
+@keyframes intro-glow-pulse {
+  0% { opacity: 0; transform: scale(0.6); }
+  35% { opacity: 1; }
+  100% { opacity: 0.55; transform: scale(1); }
+}
 
 .intro-cube {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: 92px;
+  height: 92px;
   transform-style: preserve-3d;
-  animation: intro-cube-spin 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation:
+    intro-cube-settle 1.15s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+    intro-cube-sway 4s ease-in-out 1.15s infinite;
 }
 
 .intro-cube-face {
@@ -110,38 +130,75 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--color-surface-3), var(--color-surface));
-  border: 1px solid var(--color-orange-600);
-  box-shadow: inset 0 0 24px rgba(242, 105, 28, 0.08);
+  border-radius: 10px;
+  background: linear-gradient(155deg, var(--color-surface-2) 0%, var(--color-surface) 60%, #0d0d0f 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(242, 105, 28, 0.28),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 26px rgba(242, 105, 28, 0.05);
 }
-.intro-cube-face.intro-face-front { transform: translateZ(48px); }
-.intro-cube-face.intro-face-back { transform: rotateY(180deg) translateZ(48px); }
-.intro-cube-face.intro-face-right { transform: rotateY(90deg) translateZ(48px); }
-.intro-cube-face.intro-face-left { transform: rotateY(-90deg) translateZ(48px); }
-.intro-cube-face.intro-face-top { transform: rotateX(90deg) translateZ(48px); }
-.intro-cube-face.intro-face-bottom { transform: rotateX(-90deg) translateZ(48px); }
+.intro-cube-face.intro-face-front { transform: translateZ(46px); overflow: hidden; }
+.intro-cube-face.intro-face-back { transform: rotateY(180deg) translateZ(46px); }
+.intro-cube-face.intro-face-right { transform: rotateY(90deg) translateZ(46px); }
+.intro-cube-face.intro-face-left { transform: rotateY(-90deg) translateZ(46px); }
+.intro-cube-face.intro-face-top { transform: rotateX(90deg) translateZ(46px); }
+.intro-cube-face.intro-face-bottom { transform: rotateX(-90deg) translateZ(46px); }
 
-@keyframes intro-cube-spin {
-  0% { transform: rotateX(-35deg) rotateY(-680deg) scale(0.35); opacity: 0; }
-  45% { opacity: 1; }
-  100% { transform: rotateX(-18deg) rotateY(360deg) scale(1); opacity: 1; }
+/* Light sweep across the front face — reads as a glass/metal reflection, not a spin gimmick. */
+.intro-sheen {
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.16) 50%, transparent 60%);
+  transform: translateX(-120%);
+  animation: intro-sheen-sweep 0.9s cubic-bezier(0.4, 0, 0.2, 1) 0.85s forwards;
+}
+@keyframes intro-sheen-sweep {
+  to { transform: translateX(120%); }
+}
+
+@keyframes intro-cube-settle {
+  0% { transform: rotateX(14deg) rotateY(-52deg) translateY(14px) scale(0.72); opacity: 0; }
+  55% { opacity: 1; }
+  100% { transform: rotateX(-9deg) rotateY(-26deg) translateY(0) scale(1); opacity: 1; }
+}
+@keyframes intro-cube-sway {
+  0%, 100% { transform: rotateX(-9deg) rotateY(-26deg); }
+  50% { transform: rotateX(-6deg) rotateY(-20deg); }
 }
 
 .intro-wordmark {
   opacity: 0;
-  transform: translateY(14px) rotateX(-30deg);
-  transform-style: preserve-3d;
-  animation: intro-wordmark-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  animation-delay: 1.05s;
+  letter-spacing: 0.6em;
+  filter: blur(6px);
+  transform: translateY(10px);
+  animation: intro-wordmark-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.85s forwards;
 }
 @keyframes intro-wordmark-in {
-  to { opacity: 1; transform: translateY(0) rotateX(0); }
+  to { opacity: 1; letter-spacing: 0.3em; filter: blur(0); transform: translateY(0); }
+}
+
+.intro-rule {
+  width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-orange-500), transparent);
+  animation: intro-rule-draw 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1.5s forwards;
+}
+@keyframes intro-rule-draw {
+  to { width: 120px; }
+}
+
+.intro-tagline {
+  opacity: 0;
+  animation: intro-tagline-in 0.5s ease-out 1.65s forwards;
+}
+@keyframes intro-tagline-in {
+  to { opacity: 1; }
 }
 
 .intro-exit {
-  animation: intro-exit 0.45s cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: intro-exit 0.55s cubic-bezier(0.6, 0, 1, 0.2) forwards;
 }
 @keyframes intro-exit {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(1.18); }
+  from { opacity: 1; filter: blur(0); transform: scale(1); }
+  to { opacity: 0; filter: blur(10px); transform: scale(0.97); }
 }
