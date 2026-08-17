@@ -15,7 +15,7 @@ import { communityAccent } from '@/lib/color'
 import logo from '@/assets/logo.png'
 
 const NAV = [
-  { to: '/', label: 'Home', icon: Home, end: true },
+  { to: '/home', label: 'Home', icon: Home, end: true },
   { to: '/friends', label: 'Friends', icon: Users },
   { to: '/messages', label: 'Messages', icon: MessageSquare },
   { to: '/party', label: 'Party', icon: Swords },
