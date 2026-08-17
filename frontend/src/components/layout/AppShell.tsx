@@ -3,7 +3,7 @@ import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 
 const TITLES: Record<string, string> = {
-  '/': 'Home',
+  '/home': 'Home',
   '/friends': 'Friends',
   '/messages': 'Messages',
   '/party': 'Party',
