@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { AuthGate, RequireAuth, RequireGuest, RootRoute } from '@/lib/auth/guards'
@@ -30,8 +31,17 @@ import { NetworkErrorPage } from '@/features/errors/NetworkErrorPage'
 import { OfflinePage } from '@/features/errors/OfflinePage'
 import { CallOverlay } from '@/components/shared/CallOverlay'
 import { PartyInviteOverlay } from '@/components/shared/PartyInviteOverlay'
+import { StartAnimation } from '@/components/shared/StartAnimation'
+
+const prefersReducedMotion =
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export default function App() {
+  // Overlay only — it renders on top of AuthGate/Routes below, which mount
+  // and start their real work (session bootstrap, route render) immediately
+  // and in parallel, so the intro never adds to actual load time.
+  const [showIntro, setShowIntro] = useState(!prefersReducedMotion)
+
   return (
     <BrowserRouter>
       <AuthGate>
@@ -81,6 +91,7 @@ export default function App() {
         <CallOverlay />
         <PartyInviteOverlay />
       </AuthGate>
+      {showIntro && <StartAnimation onFinish={() => setShowIntro(false)} />}
     </BrowserRouter>
   )
 }
