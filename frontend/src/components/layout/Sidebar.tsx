@@ -110,7 +110,7 @@ export function Sidebar() {
               cn('focus-ring flex items-center gap-3 rounded-sm px-3 py-2 text-sm transition-colors', isActive ? 'bg-surface-2 text-steel-100' : 'text-steel-400 hover:bg-surface-2 hover:text-steel-100')
             }
           >
-            <span className="bevel-sm flex size-7 shrink-0 items-center justify-center text-[10px] font-display font-bold text-black" style={{ backgroundColor: communityAccent(c.id) }}>
+            <span className="bevel-sm flex size-7 shrink-0 items-center justify-center text-[10px] font-display font-bold text-black" style={{ backgroundColor: c.accentColor || communityAccent(c.id) }}>
               {c.tag.slice(0, 2)}
             </span>
             <span className="min-w-0 flex-1 truncate">{c.name}</span>
