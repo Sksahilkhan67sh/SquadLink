@@ -34,6 +34,7 @@ import {
   PartyEndedPayload,
   PartyInviteCreatedPayload,
 } from '../party/party.service';
+import { CHANNEL_MESSAGE_CREATED_EVENT } from '../communities/communities.service';
 
 function userRoom(userId: string) {
   return `user:${userId}`;
@@ -43,6 +44,9 @@ function conversationRoom(conversationId: string) {
 }
 function partyRoom(partyId: string) {
   return `party:${partyId}`;
+}
+function channelRoom(channelId: string) {
+  return `channel:${channelId}`;
 }
 
 interface PendingCall {
@@ -183,6 +187,26 @@ export class RealtimeGateway
     return member !== null;
   }
 
+  private async isChannelMemberByCommunity(
+    channelId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const channel = await this.prisma.channel.findUnique({
+      where: { id: channelId },
+      select: { channelGroup: { select: { communityId: true } } },
+    });
+    if (!channel) return false;
+    const member = await this.prisma.communityMember.findUnique({
+      where: {
+        communityId_userId: {
+          communityId: channel.channelGroup.communityId,
+          userId,
+        },
+      },
+    });
+    return member !== null;
+  }
+
   // Starting a voice call rings every other party member, so this is
   // restricted to the party leader (same as kicking members / settings) to
   // stop any invited member from blasting a ring to the whole party.
@@ -277,6 +301,32 @@ export class RealtimeGateway
     @MessageBody() data: { partyId: string },
   ) {
     void client.leave(partyRoom(data.partyId));
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('channel:join')
+  async onJoinChannel(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { channelId: string },
+  ) {
+    const allowed = await this.isChannelMemberByCommunity(
+      data.channelId,
+      client.data.user.id,
+    );
+    if (!allowed) {
+      client.emit('error', { message: 'Not a member of this channel' });
+      return;
+    }
+    void client.join(channelRoom(data.channelId));
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('channel:leave')
+  onLeaveChannel(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { channelId: string },
+  ) {
+    void client.leave(channelRoom(data.channelId));
   }
 
   // -------------------------------------------------------------------
@@ -476,5 +526,19 @@ export class RealtimeGateway
     this.server
       .to(userRoom(payload.inviteeId))
       .emit('party:invite', redactSensitiveFields(payload.invite));
+  }
+
+  @OnEvent(CHANNEL_MESSAGE_CREATED_EVENT)
+  handleChannelMessageCreated(payload: {
+    communityId: string;
+    channelId: string;
+    message: unknown;
+  }) {
+    this.server
+      .to(channelRoom(payload.channelId))
+      .emit('channel:message:created', {
+        channelId: payload.channelId,
+        message: redactSensitiveFields(payload.message),
+      });
   }
 }
