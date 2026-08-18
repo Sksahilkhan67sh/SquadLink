@@ -1,17 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { ChannelType } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   ConflictException,
   ForbiddenActionException,
   ResourceNotFoundException,
 } from '../common/exceptions/app.exceptions';
+import { paginate } from '../common/dto/pagination.dto';
 import { CommunitiesRepository } from './communities.repository';
 
 const MANAGE_PERMISSIONS = ['ADMINISTRATOR', 'MANAGE_CHANNELS', 'MANAGE_ROLES'];
 
+export const CHANNEL_MESSAGE_CREATED_EVENT = 'channel.message.created';
+
 @Injectable()
 export class CommunitiesService {
-  constructor(private readonly communitiesRepository: CommunitiesRepository) {}
+  constructor(
+    private readonly communitiesRepository: CommunitiesRepository,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   create(ownerId: string, name: string, tag: string) {
     return this.communitiesRepository.create(ownerId, name, tag.toUpperCase());
@@ -253,5 +260,58 @@ export class CommunitiesService {
   async listAnnouncements(userId: string, communityId: string) {
     await this.getByIdForMember(userId, communityId);
     return this.communitiesRepository.listAnnouncements(communityId);
+  }
+
+  private assertChannelInCommunity(
+    community: { channelGroups: { channels: { id: string; type: ChannelType }[] }[] },
+    channelId: string,
+  ) {
+    const channel = community.channelGroups
+      .flatMap((g) => g.channels)
+      .find((c) => c.id === channelId);
+    if (!channel)
+      throw new ResourceNotFoundException('Channel', channelId);
+    return channel;
+  }
+
+  async listChannelMessages(
+    userId: string,
+    communityId: string,
+    channelId: string,
+    page: number,
+    limit: number,
+  ) {
+    const community = await this.getByIdForMember(userId, communityId);
+    this.assertChannelInCommunity(community, channelId);
+    const { items, total } = await this.communitiesRepository.listChannelMessages(
+      channelId,
+      page,
+      limit,
+    );
+    return paginate(items, total, page, limit);
+  }
+
+  async sendChannelMessage(
+    userId: string,
+    communityId: string,
+    channelId: string,
+    content: string,
+  ) {
+    const community = await this.getByIdForMember(userId, communityId);
+    const channel = this.assertChannelInCommunity(community, channelId);
+    if (channel.type !== ChannelType.TEXT && channel.type !== ChannelType.ANNOUNCEMENT)
+      throw new ForbiddenActionException('This channel does not support text messages');
+
+    const message = await this.communitiesRepository.createChannelMessage(
+      channelId,
+      userId,
+      content,
+    );
+    this.eventEmitter.emit(CHANNEL_MESSAGE_CREATED_EVENT, {
+      communityId,
+      channelId,
+      message,
+    });
+    return message;
   }
 }
