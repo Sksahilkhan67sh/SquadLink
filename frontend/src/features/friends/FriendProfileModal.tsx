@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { MessageSquare, Swords, UserMinus, Gamepad2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Avatar } from '@/components/ui/Avatar'
@@ -10,12 +11,25 @@ const STATUS_LABEL: Record<string, string> = {
   online: 'Online', 'in-game': 'In Game', idle: 'Idle', 'do-not-disturb': 'Do Not Disturb', offline: 'Offline',
 }
 
-export function FriendProfileModal({ friend, onClose, onMessage, onRemove }: {
+export function FriendProfileModal({ friend, onClose, onMessage, onRemove, onInvite }: {
   friend: Friend | null
   onClose: () => void
   onMessage: (f: Friend) => void
   onRemove: (f: Friend) => void
+  onInvite: (f: Friend) => Promise<void>
 }) {
+  const [inviting, setInviting] = useState(false)
+
+  async function handleInvite() {
+    if (!friend) return
+    setInviting(true)
+    try {
+      await onInvite(friend)
+    } finally {
+      setInviting(false)
+    }
+  }
+
   return (
     <Modal open={!!friend} onClose={onClose}>
       {friend && (
@@ -47,7 +61,7 @@ export function FriendProfileModal({ friend, onClose, onMessage, onRemove }: {
             <Button className="flex-1" onClick={() => onMessage(friend)}>
               <MessageSquare className="size-4" /> Message
             </Button>
-            <Button variant="secondary" className="flex-1">
+            <Button variant="secondary" className="flex-1" onClick={handleInvite} loading={inviting}>
               <Swords className="size-4" /> Invite to Party
             </Button>
             <Button variant="danger" size="icon" onClick={() => onRemove(friend)} aria-label="Remove friend">
