@@ -134,4 +134,24 @@ export class UpdatePreferencesDto {
   @IsOptional()
   @IsIn(['everyone', 'friends-of-friends', 'none'])
   allowFriendRequests?: string;
+
+  // Overlay settings previously lived only in frontend component state
+  // (OverlayPage.tsx) and were lost on every reload — these persist them
+  // the same way every other preference here does.
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  overlayEnabled?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsIn(['top-left', 'top-right', 'bottom-left', 'bottom-right'])
+  overlayPosition?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(30)
+  @Max(100)
+  overlayOpacity?: number;
 }
