@@ -21,7 +21,10 @@ import {
   CreateCommunityDto,
   CreateEventDto,
   CreateRoleDto,
+  SendChannelMessageDto,
+  UpdateCommunityDto,
 } from './dto/community.dto';
+import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @ApiTags('communities')
 @ApiBearerAuth()
@@ -61,7 +64,7 @@ export class CommunitiesController {
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body() dto: Partial<CreateCommunityDto>,
+    @Body() dto: UpdateCommunityDto,
   ) {
     return this.communitiesService.update(user.id, id, dto);
   }
@@ -145,6 +148,39 @@ export class CommunitiesController {
     @Param('channelId') channelId: string,
   ) {
     return this.communitiesService.deleteChannel(user.id, id, channelId);
+  }
+
+  @Get(':id/channels/:channelId/messages')
+  @ApiOperation({ summary: 'List messages in a text channel, paginated' })
+  listChannelMessages(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('channelId') channelId: string,
+    @Query() query: PaginationQueryDto,
+  ) {
+    return this.communitiesService.listChannelMessages(
+      user.id,
+      id,
+      channelId,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @Post(':id/channels/:channelId/messages')
+  @ApiOperation({ summary: 'Send a message in a text channel' })
+  sendChannelMessage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('channelId') channelId: string,
+    @Body() dto: SendChannelMessageDto,
+  ) {
+    return this.communitiesService.sendChannelMessage(
+      user.id,
+      id,
+      channelId,
+      dto.content,
+    );
   }
 
   @Post(':id/roles')
