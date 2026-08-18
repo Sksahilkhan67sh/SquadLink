@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
 import { UsersService } from '../users/users.service';
 import { AuthService } from '../auth/auth.service';
 import { UpdatePreferencesDto } from '../users/dto/update-user.dto';
@@ -7,7 +6,6 @@ import { UpdatePreferencesDto } from '../users/dto/update-user.dto';
 @Injectable()
 export class SettingsService {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly authService: AuthService,
   ) {}
@@ -29,8 +27,16 @@ export class SettingsService {
   }
 
   async deleteAccount(userId: string): Promise<void> {
-    // Cascading deletes configured in the Prisma schema handle sessions,
-    // memberships, messages authored, etc.
-    await this.prisma.user.delete({ where: { id: userId } });
+    // Previously this did a raw `this.prisma.user.delete()` — which
+    // throws a foreign-key error for anyone who owns a Community or
+    // Party (those relations are onDelete: Restrict, deliberately, so a
+    // deletion can't silently cascade into other members' data — see
+    // the schema comments on Party.owner/Community.owner). It also
+    // skipped revoking sessions and closing voice rooms. UsersService
+    // already has the correct version — transaction-safe ownership
+    // handoff, then a soft-delete/anonymize — used by DELETE /users/me;
+    // delegating here means there's exactly one account-deletion path
+    // instead of two that disagree.
+    await this.usersService.deleteAccount(userId);
   }
 }
