@@ -69,7 +69,7 @@ export function CommunitiesPage() {
   }
 
   function renderCard(c: ApiCommunity, joined: boolean) {
-    const accent = communityAccent(c.id)
+    const accent = c.accentColor || communityAccent(c.id)
     return (
       <Card key={c.id} className="transition-colors hover:border-border-strong">
         <button onClick={() => (joined ? navigate(`/communities/${c.id}`) : undefined)} className={joined ? 'block w-full cursor-pointer text-left' : 'block w-full text-left'}>
