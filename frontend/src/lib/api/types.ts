@@ -198,11 +198,23 @@ export interface ApiAnnouncement {
   author?: ApiUserPublic | null
 }
 
+export interface ApiChannelMessage {
+  id: string
+  channelId: string
+  authorId: string
+  author: ApiUserPublic
+  content: string
+  editedAt: string | null
+  createdAt: string
+}
+
 export interface ApiCommunity {
   id: string
   name: string
   tag: string
   iconUrl: string | null
+  accentColor: string
+  ownerId: string
   memberCount: number
   onlineCount?: number
   channelGroups?: ApiChannelGroup[]
@@ -238,6 +250,9 @@ export interface ApiPreferences {
   notifySound: boolean
   showActivityStatus: boolean
   allowFriendRequests: string
+  overlayEnabled: boolean
+  overlayPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  overlayOpacity: number
 }
 
 export interface ApiUpload {
