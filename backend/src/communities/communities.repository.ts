@@ -293,4 +293,28 @@ export class CommunitiesRepository {
       orderBy: { postedAt: 'desc' },
     });
   }
+
+  async listChannelMessages(channelId: string, page: number, limit: number) {
+    // Mirrors MessagesRepository.listMessages — same offset-pagination
+    // contract, same indexed (channelId, createdAt) query shape.
+    const where = { channelId, deletedAt: null } satisfies Prisma.ChannelMessageWhereInput;
+    const [items, total] = await Promise.all([
+      this.prisma.channelMessage.findMany({
+        where,
+        include: { author: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.channelMessage.count({ where }),
+    ]);
+    return { items, total };
+  }
+
+  createChannelMessage(channelId: string, authorId: string, content: string) {
+    return this.prisma.channelMessage.create({
+      data: { channelId, authorId, content },
+      include: { author: true },
+    });
+  }
 }
