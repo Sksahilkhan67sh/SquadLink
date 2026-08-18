@@ -180,7 +180,7 @@ export function HomePage() {
               {communities.length === 0 && <p className="text-sm text-steel-600">You haven't joined any communities yet.</p>}
               {communities.map((c) => (
                 <button key={c.id} onClick={() => navigate(`/communities/${c.id}`)} className="focus-ring flex w-full items-center gap-3 text-left hover:opacity-80">
-                  <span className="bevel-sm flex size-9 shrink-0 items-center justify-center text-xs font-display font-bold text-black" style={{ backgroundColor: communityAccent(c.id) }}>
+                  <span className="bevel-sm flex size-9 shrink-0 items-center justify-center text-xs font-display font-bold text-black" style={{ backgroundColor: c.accentColor || communityAccent(c.id) }}>
                     {c.tag.slice(0, 2)}
                   </span>
                   <div className="min-w-0 flex-1">
