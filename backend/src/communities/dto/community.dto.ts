@@ -28,6 +28,33 @@ export class CreateCommunityDto {
   tag!: string;
 }
 
+export class UpdateCommunityDto {
+  @ApiPropertyOptional({ example: 'Ascendant Collective' })
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(48)
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'ASND' })
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(6)
+  tag?: string;
+
+  // The service (CommunitiesService.update) has always accepted this, but
+  // the controller previously typed the body as Partial<CreateCommunityDto>
+  // — which doesn't declare accentColor — and main.ts's ValidationPipe runs
+  // with forbidNonWhitelisted: true, so any request that actually included
+  // accentColor was rejected outright with a 400. This DTO is what makes
+  // the field reachable through the API at all.
+  @ApiPropertyOptional({ example: '#f2691c' })
+  @IsOptional()
+  @IsHexColor()
+  accentColor?: string;
+}
+
 export class CreateChannelGroupDto {
   @ApiProperty({ example: 'Voice' })
   @IsString()
@@ -114,4 +141,12 @@ export class CreateAnnouncementDto {
   @MinLength(1)
   @MaxLength(2000)
   body!: string;
+}
+
+export class SendChannelMessageDto {
+  @ApiProperty({ example: 'anyone up for a scrim tonight?' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(4000)
+  content!: string;
 }
