@@ -104,7 +104,7 @@ export function SearchPage() {
             ))}
             {results.communities.map((c) => (
               <button key={c.id} onClick={() => navigate(`/communities/${c.id}`)} className="focus-ring flex items-center gap-3 rounded-sm border border-border bg-surface p-3.5 text-left hover:bg-surface-2">
-                <span className="bevel-sm flex size-8 items-center justify-center text-[10px] font-display font-bold text-black" style={{ backgroundColor: communityAccent(c.id) }}>{c.tag.slice(0, 2)}</span>
+                <span className="bevel-sm flex size-8 items-center justify-center text-[10px] font-display font-bold text-black" style={{ backgroundColor: c.accentColor || communityAccent(c.id) }}>{c.tag.slice(0, 2)}</span>
                 <span className="text-sm font-medium text-steel-100">{c.name}</span>
                 <Compass className="ml-auto size-4 text-steel-600" />
               </button>
@@ -128,7 +128,7 @@ export function SearchPage() {
           <TabsContent value="communities" className="flex flex-col gap-2">
             {results.communities.map((c) => (
               <button key={c.id} onClick={() => navigate(`/communities/${c.id}`)} className="focus-ring flex items-center gap-3 rounded-sm border border-border bg-surface p-3.5 text-left hover:bg-surface-2">
-                <span className="bevel-sm flex size-8 items-center justify-center text-[10px] font-display font-bold text-black" style={{ backgroundColor: communityAccent(c.id) }}>{c.tag.slice(0, 2)}</span>
+                <span className="bevel-sm flex size-8 items-center justify-center text-[10px] font-display font-bold text-black" style={{ backgroundColor: c.accentColor || communityAccent(c.id) }}>{c.tag.slice(0, 2)}</span>
                 <span className="text-sm font-medium text-steel-100">{c.name}</span>
               </button>
             ))}
