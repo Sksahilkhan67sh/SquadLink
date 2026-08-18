@@ -129,6 +129,7 @@ model User {
   conversations     ConversationParticipant[]
   messages          Message[]
   messageReactions  MessageReaction[]
+  channelMessages   ChannelMessage[]
 
   ownedParties      Party[]             @relation("PartyOwner")
   partyMemberships  PartyMember[]
@@ -170,6 +171,10 @@ model UserPreferences {
 
   showActivityStatus   Boolean  @default(true)
   allowFriendRequests  String   @default("friends-of-friends")
+
+  overlayEnabled       Boolean  @default(true)
+  overlayPosition      String   @default("top-right")
+  overlayOpacity       Int      @default(90)
 
   updatedAt            DateTime @updatedAt
 }
@@ -518,7 +523,27 @@ model Channel {
   voiceRoomId    String?      @unique
   voiceRoom      VoiceRoom?   @relation(fields: [voiceRoomId], references: [id])
 
+  messages       ChannelMessage[]
+
   @@index([channelGroupId])
+}
+
+model ChannelMessage {
+  id         String    @id @default(uuid())
+  channelId  String
+  channel    Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content    String
+  editedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  // Soft delete, same rationale as Message.deletedAt above — keeps the
+  // row (and its id) around for moderation history instead of a hard
+  // delete that erases the trail.
+  deletedAt  DateTime?
+
+  @@index([channelId, createdAt])
+  @@index([authorId])
 }
 
 model CommunityEvent {
