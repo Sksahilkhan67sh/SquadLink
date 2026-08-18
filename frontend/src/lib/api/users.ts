@@ -10,12 +10,10 @@ export const usersApi = {
   updatePresence: (data: Partial<{ status: string; statusText: string; currentGame: string }>) =>
     http.patch<ApiUserPrivate>('/users/me/presence', data),
 
-  // NOTE: the backend also exposes GET/PATCH /users/me/preferences, which is
-  // a duplicate of /settings/preferences (see settings.ts). Both currently
-  // read/write the same UserPreferences row. The frontend standardizes on
-  // settingsApi for preferences so there's a single source of truth; the
-  // duplicate route is flagged in the integration report rather than used
-  // here or removed from the backend.
+  // Preferences live only under settingsApi (/settings/preferences) — the
+  // backend used to also expose GET/PATCH /users/me/preferences as an
+  // undocumented duplicate of the same UserPreferences row; that route has
+  // been removed so there's a single source of truth.
 
   deleteAccount: () => http.delete<void>('/users/me'),
 
