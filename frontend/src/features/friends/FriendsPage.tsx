@@ -14,6 +14,7 @@ import { ContextMenu } from '@/components/ui/ContextMenu'
 import { useToast } from '@/components/ui/Toast'
 import { friendsApi, type ApiFriendEntry } from '@/lib/api/friends'
 import { messagesApi } from '@/lib/api/messages'
+import { partyApi } from '@/lib/api/party'
 import { useApiData } from '@/lib/hooks/useApiData'
 import { friendToUi } from '@/lib/adapters'
 import { ApiError } from '@/lib/api/http'
@@ -132,6 +133,39 @@ export function FriendsPage() {
     }
   }
 
+  const togglePin = useCallback(
+    async (f: Friend) => {
+      const nextPinned = !f.pinned
+      const prev = friendsList
+      setFriendsList((p) => p.map((entry) => (entry.friend.id === f.id ? { ...entry, pinned: nextPinned } : entry)))
+      try {
+        await (nextPinned ? friendsApi.pin(f.id) : friendsApi.unpin(f.id))
+      } catch {
+        setFriendsList(prev)
+        push({ kind: 'error', title: nextPinned ? "Couldn't pin friend" : "Couldn't unpin friend", description: 'Try again.' })
+      }
+    },
+    [friendsList, push],
+  )
+
+  async function inviteToParty(f: Friend) {
+    try {
+      const activeParty = await partyApi.getActive()
+      if (!activeParty) {
+        push({ kind: 'info', title: 'No active party', description: 'Create or join a party first, then invite friends from there.' })
+        return
+      }
+      await partyApi.invite(activeParty.id, f.id)
+      push({ kind: 'success', title: 'Invite sent', description: `${f.displayName} was invited to ${activeParty.name}.` })
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        push({ kind: 'info', title: 'Already invited', description: `${f.displayName} already has a pending invite or is in the party.` })
+      } else {
+        push({ kind: 'error', title: "Couldn't send invite", description: 'Try again.' })
+      }
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-6">
       <PageHeader
@@ -161,14 +195,14 @@ export function FriendsPage() {
               {pinned.length > 0 && (
                 <div className="mb-5">
                   <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-steel-600"><Pin className="size-3" /> Pinned</p>
-                  <FriendGrid list={pinned} onOpen={setSelected} onMessage={openDm} />
+                  <FriendGrid list={pinned} onOpen={setSelected} onMessage={openDm} onTogglePin={togglePin} />
                 </div>
               )}
               <p className="mb-2 text-xs font-bold uppercase tracking-widest text-steel-600">All Friends — {filtered.length}</p>
               {filtered.length === 0 ? (
                 <EmptyState icon={<Search className="size-6" />} title="No friends found" description={query ? 'Try a different search term.' : 'Send a friend request to get started.'} />
               ) : (
-                <FriendGrid list={filtered} onOpen={setSelected} onMessage={openDm} onRemove={removeFriend} />
+                <FriendGrid list={filtered} onOpen={setSelected} onMessage={openDm} onRemove={removeFriend} onTogglePin={togglePin} />
               )}
             </>
           )}
@@ -179,7 +213,7 @@ export function FriendsPage() {
           {online.length === 0 ? (
             <EmptyState icon={<Search className="size-6" />} title="No one's online" description="Check back later, or send an invite." />
           ) : (
-            <FriendGrid list={online} onOpen={setSelected} onMessage={openDm} onRemove={removeFriend} />
+            <FriendGrid list={online} onOpen={setSelected} onMessage={openDm} onRemove={removeFriend} onTogglePin={togglePin} />
           )}
         </TabsContent>
 
@@ -254,6 +288,7 @@ export function FriendsPage() {
         onClose={() => setSelected(null)}
         onMessage={(f) => { setSelected(null); openDm(f) }}
         onRemove={removeFriend}
+        onInvite={inviteToParty}
       />
     </div>
   )
@@ -271,11 +306,12 @@ function FriendSearchBar({ query, setQuery }: { query: string; setQuery: (v: str
   )
 }
 
-function FriendGrid({ list, onOpen, onMessage, onRemove }: {
+function FriendGrid({ list, onOpen, onMessage, onRemove, onTogglePin }: {
   list: Friend[]
   onOpen: (f: Friend) => void
   onMessage: (f: Friend) => void
   onRemove?: (f: Friend) => void
+  onTogglePin: (f: Friend) => void
 }) {
   return (
     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -285,6 +321,7 @@ function FriendGrid({ list, onOpen, onMessage, onRemove }: {
           items={[
             { label: 'View profile', onClick: () => onOpen(f) },
             { label: 'Send message', icon: <MessageSquare className="size-4" />, onClick: () => onMessage(f) },
+            { label: f.pinned ? 'Unpin friend' : 'Pin friend', icon: <Pin className="size-4" />, onClick: () => onTogglePin(f) },
             ...(onRemove ? [{ label: 'Remove friend', danger: true, onClick: () => onRemove(f) }] : []),
           ]}
         >
