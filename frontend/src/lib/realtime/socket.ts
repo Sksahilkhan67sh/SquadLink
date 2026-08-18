@@ -1,7 +1,7 @@
 import { io, type Socket } from 'socket.io-client'
 import { env } from '../env'
 import { getAccessToken } from '../api/http'
-import type { ApiMessage, ApiNotification, PresenceStatusApi } from '../api/types'
+import type { ApiMessage, ApiNotification, ApiChannelMessage, PresenceStatusApi } from '../api/types'
 
 export interface PartyInviteEvent {
   id: string
@@ -24,6 +24,7 @@ export interface ServerToClientEvents {
   'party:updated': (data: unknown) => void
   'party:ended': (data: { partyId: string; reason: 'host_left' | 'empty' }) => void
   'party:invite': (data: PartyInviteEvent) => void
+  'channel:message:created': (data: { channelId: string; message: ApiChannelMessage }) => void
   'call:incoming': (data: { callId: string; partyId: string; partyName: string; callerId: string; callerName: string; callerAvatarColor: string }) => void
   'call:ringing': (data: { callId: string; partyId: string }) => void
   'call:accepted': (data: { callId: string; partyId: string; userId: string }) => void
@@ -40,6 +41,8 @@ export interface ClientToServerEvents {
   'typing:stop': (data: { conversationId: string }) => void
   'party:join': (data: { partyId: string }) => void
   'party:leave': (data: { partyId: string }) => void
+  'channel:join': (data: { channelId: string }) => void
+  'channel:leave': (data: { channelId: string }) => void
   'call:invite': (data: { partyId: string }) => void
   'call:respond': (data: { callId: string; accept: boolean }) => void
   'call:cancel': (data: { callId: string }) => void
