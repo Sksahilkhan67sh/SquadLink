@@ -15,12 +15,15 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { useToast } from '@/components/ui/Toast'
 import { communitiesApi } from '@/lib/api/communities'
 import { voiceApi } from '@/lib/api/voice'
+import { ApiError } from '@/lib/api/http'
 import { useApiData } from '@/lib/hooks/useApiData'
 import { presenceToUi } from '@/lib/adapters'
 import { communityAccent } from '@/lib/color'
 import { cn, timeAgo } from '@/lib/utils'
 import { env } from '@/lib/env'
-import type { ApiChannel } from '@/lib/api/types'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { getSocket } from '@/lib/realtime/socket'
+import type { ApiChannel, ApiChannelMessage } from '@/lib/api/types'
 
 export function CommunityDetailPage() {
   const { id } = useParams()
@@ -35,6 +38,11 @@ export function CommunityDetailPage() {
   const [evTitle, setEvTitle] = useState('')
   const [evDate, setEvDate] = useState('')
   const [evGame, setEvGame] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [stName, setStName] = useState('')
+  const [stTag, setStTag] = useState('')
+  const [stAccent, setStAccent] = useState('#f2691c')
+  const [savingSettings, setSavingSettings] = useState(false)
 
   useEffect(() => {
     if (communityState.status === 'success' && !activeChannel) {
@@ -67,6 +75,32 @@ export function CommunityDetailPage() {
       push({ kind: 'success', title: 'Event created' })
     } catch {
       push({ kind: 'error', title: "Couldn't create event" })
+    }
+  }
+
+  function openSettings() {
+    setStName(community.name)
+    setStTag(community.tag)
+    setStAccent(community.accentColor || '#f2691c')
+    setSettingsOpen(true)
+  }
+
+  async function saveSettings() {
+    if (!stName.trim() || !stTag.trim()) return
+    setSavingSettings(true)
+    try {
+      await communitiesApi.update(id!, { name: stName.trim(), tag: stTag.trim().toUpperCase(), accentColor: stAccent })
+      communityState.retry()
+      setSettingsOpen(false)
+      push({ kind: 'success', title: 'Community updated' })
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        push({ kind: 'error', title: "You don't have permission", description: 'Only the owner or a manager can change these settings.' })
+      } else {
+        push({ kind: 'error', title: "Couldn't save changes", description: 'Try again.' })
+      }
+    } finally {
+      setSavingSettings(false)
     }
   }
 
@@ -107,7 +141,7 @@ export function CommunityDetailPage() {
         <PageHeader
           title={community.name}
           description={`${community.memberCount.toLocaleString()} members`}
-          actions={<Button variant="outline"><Settings2 className="size-4" /> Community Settings</Button>}
+          actions={<Button variant="outline" onClick={openSettings}><Settings2 className="size-4" /> Community Settings</Button>}
         />
 
         <Tabs defaultValue="channel">
@@ -125,11 +159,7 @@ export function CommunityDetailPage() {
             ) : channel.type === 'VOICE' ? (
               <VoiceChannelPanel channel={channel} />
             ) : (
-              <EmptyState
-                icon={<Hash className="size-6" />}
-                title={`#${channel.name}`}
-                description="Text channel messaging isn't available yet — this is a known backend gap (see integration report). Channel structure, voice, members, events, announcements, and roles are fully live."
-              />
+              <TextChannelPanel communityId={id!} channel={channel} />
             )}
           </TabsContent>
 
@@ -231,6 +261,155 @@ export function CommunityDetailPage() {
           <Input placeholder="Game (optional)" value={evGame} onChange={(e) => setEvGame(e.target.value)} />
         </div>
       </Modal>
+
+      <Modal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title="Community Settings"
+        footer={<Button onClick={saveSettings} loading={savingSettings} disabled={!stName.trim() || !stTag.trim()}>Save Changes</Button>}
+      >
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-steel-500">Name</label>
+            <Input value={stName} onChange={(e) => setStName(e.target.value)} maxLength={48} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-steel-500">Tag</label>
+            <Input value={stTag} onChange={(e) => setStTag(e.target.value.toUpperCase())} maxLength={6} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-steel-500">Accent Color</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={stAccent}
+                onChange={(e) => setStAccent(e.target.value)}
+                className="size-10 shrink-0 cursor-pointer rounded-sm border border-border bg-transparent"
+              />
+              <span className="bevel-sm flex size-10 items-center justify-center text-xs font-display font-bold text-black" style={{ backgroundColor: stAccent }}>
+                {stTag.slice(0, 2) || '??'}
+              </span>
+              <p className="text-xs text-steel-600">Shown next to the community everywhere in the app.</p>
+            </div>
+          </div>
+          <p className="text-xs text-steel-600">Only the owner or a member with manage permissions can save changes.</p>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+/** Text-channel chat — REST for history, socket room for live delivery, same split as DM messaging. */
+function TextChannelPanel({ communityId, channel }: { communityId: string; channel: ApiChannel }) {
+  const { user } = useAuth()
+  const { push } = useToast()
+  const [messages, setMessages] = useState<ApiChannelMessage[]>([])
+  const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  const listRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    communitiesApi
+      .listChannelMessages(communityId, channel.id)
+      .then((page) => {
+        if (cancelled) return
+        // API returns newest-first (same convention as DM history); reverse for top-to-bottom display.
+        setMessages([...page.items].reverse())
+      })
+      .catch(() => {
+        if (!cancelled) push({ kind: 'error', title: "Couldn't load messages" })
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communityId, channel.id])
+
+  useEffect(() => {
+    const socket = getSocket()
+    if (!socket) return
+    socket.emit('channel:join', { channelId: channel.id })
+
+    const onMessage = (data: { channelId: string; message: ApiChannelMessage }) => {
+      if (data.channelId !== channel.id) return
+      setMessages((prev) => (prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message]))
+    }
+    socket.on('channel:message:created', onMessage)
+
+    return () => {
+      socket.emit('channel:leave', { channelId: channel.id })
+      socket.off('channel:message:created', onMessage)
+    }
+  }, [channel.id])
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
+  }, [messages])
+
+  async function send() {
+    const content = draft.trim()
+    if (!content) return
+    setSending(true)
+    setDraft('')
+    try {
+      await communitiesApi.sendChannelMessage(communityId, channel.id, content)
+      // No optimistic append — the socket broadcast (which we're already
+      // joined to) delivers our own message back, same as everyone else's,
+      // so there's one code path instead of two that can drift apart.
+    } catch {
+      setDraft(content)
+      push({ kind: 'error', title: "Couldn't send message", description: 'Try again.' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="bevel-lg flex h-[calc(100vh-260px)] flex-col border border-border bg-surface">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4">
+        {loading ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+          </div>
+        ) : messages.length === 0 ? (
+          <EmptyState icon={<Hash className="size-6" />} title={`Welcome to #${channel.name}`} description="Be the first to say something." />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {messages.map((m) => (
+              <div key={m.id} className="flex items-start gap-3">
+                <Avatar name={m.author.displayName} color={m.author.avatarColor} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className={cn('text-sm font-semibold', m.authorId === user?.id ? 'text-orange-400' : 'text-steel-100')}>{m.author.displayName}</span>
+                    <span className="text-[11px] text-steel-600">{timeAgo(m.createdAt)} ago{m.editedAt ? ' · edited' : ''}</span>
+                  </div>
+                  <p className="whitespace-pre-wrap break-words text-sm text-steel-300">{m.content}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 border-t border-border p-3">
+        <Input
+          placeholder={`Message #${channel.name}`}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              send()
+            }
+          }}
+        />
+        <Button onClick={send} loading={sending} disabled={!draft.trim()}>Send</Button>
+      </div>
     </div>
   )
 }
