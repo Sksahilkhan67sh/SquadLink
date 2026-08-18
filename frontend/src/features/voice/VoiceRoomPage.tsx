@@ -101,7 +101,7 @@ export function VoiceRoomPage() {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="font-display text-base font-semibold text-steel-100">Overlay Preview</h3>
-                <p className="text-xs text-steel-500">A small in-game overlay showing who's speaking, always on top.</p>
+                <p className="text-xs text-steel-500">Preview of the widget — see the note on the Overlay page for why a browser tab can't show this over other apps yet.</p>
               </div>
               <label className="flex items-center gap-2 text-xs text-steel-400">
                 <input type="checkbox" checked={overlayOn} onChange={(e) => setOverlayOn(e.target.checked)} className="accent-orange-500" />
