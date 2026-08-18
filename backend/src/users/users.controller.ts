@@ -14,7 +14,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../common/types/authenticated-request';
 import { UsersService } from './users.service';
 import {
-  UpdatePreferencesDto,
   UpdatePresenceDto,
   UpdateProfileDto,
 } from './dto/update-user.dto';
@@ -52,21 +51,6 @@ export class UsersController {
   ): Promise<UserPrivateDto> {
     const entity = await this.usersService.updatePresence(user.id, dto);
     return UserPrivateDto.fromEntityPrivate(entity);
-  }
-
-  @Get('me/preferences')
-  @ApiOperation({ summary: 'Get settings/preferences for the current user' })
-  getPreferences(@CurrentUser() user: AuthenticatedUser) {
-    return this.usersService.getPreferences(user.id);
-  }
-
-  @Patch('me/preferences')
-  @ApiOperation({ summary: 'Update settings/preferences for the current user' })
-  updatePreferences(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: UpdatePreferencesDto,
-  ) {
-    return this.usersService.updatePreferences(user.id, dto);
   }
 
   @Delete('me')
