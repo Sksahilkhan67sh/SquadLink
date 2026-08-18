@@ -3,10 +3,12 @@ import type {
   ApiAnnouncement,
   ApiChannel,
   ApiChannelGroup,
+  ApiChannelMessage,
   ApiCommunity,
   ApiCommunityEvent,
   ApiCommunityMember,
   ApiCommunityRole,
+  PaginatedResult,
 } from './types'
 
 /**
@@ -36,7 +38,7 @@ export const communitiesApi = {
 
   get: (id: string) => http.get<RawCommunity>(`/communities/${id}`).then(normalizeCommunity),
 
-  update: (id: string, data: Partial<{ name: string; tag: string }>) =>
+  update: (id: string, data: Partial<{ name: string; tag: string; accentColor: string }>) =>
     http.patch<RawCommunity>(`/communities/${id}`, data).then(normalizeCommunity),
 
   remove: (id: string) => http.delete<void>(`/communities/${id}`),
@@ -77,4 +79,10 @@ export const communitiesApi = {
 
   createAnnouncement: (id: string, title: string, body: string) =>
     http.post<ApiAnnouncement>(`/communities/${id}/announcements`, { title, body }),
+
+  listChannelMessages: (id: string, channelId: string, page = 1, limit = 50) =>
+    http.get<PaginatedResult<ApiChannelMessage>>(`/communities/${id}/channels/${channelId}/messages`, { page, limit }),
+
+  sendChannelMessage: (id: string, channelId: string, content: string) =>
+    http.post<ApiChannelMessage>(`/communities/${id}/channels/${channelId}/messages`, { content }),
 }
